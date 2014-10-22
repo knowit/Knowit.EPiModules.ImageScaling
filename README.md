@@ -8,7 +8,7 @@ The nuget package for this project is located at [EPiServer's nuget feed](https:
 
 Usage
 ------------------------------
-__An example project on the intended usage is available in the [example](/example) folder within the git repository. This also includes how you can incorporate it with your views, as well as structuring presets. The following example only shows the implementation of the handler itself.__
+__An example project on the intended usage is available in the [sample](/sample) folder within the git repository. This also includes how you can incorporate it with your views, as well as structuring presets. The following example only shows the implementation of the handler itself.__
 
 Create a media class that inherits EPiServer.Core.ImageData with a MediaDescriptor attribute. 
 The following extensions can be used: jpg, jpeg, jpe, pjpeg, ico, gif, bmp, png, tiff
@@ -36,7 +36,7 @@ Create a class that inherits BaseImageHandler. Implement the abstract function G
                 // The image will be resized to 500px wide, with the same aspect ratio
                 return new List<ImageOperation>
                 {
-                    new ImageOperation(ImageEditorCommand.ResizeKeepScale) {Width = 500}
+                    new ImageOperation(ImageEditorCommand.Resize) {Width = 500}
                 };
             }
 
@@ -71,5 +71,5 @@ Have a look at the source code, play around and have some fun with it to get an 
 
 Notes:
 ------------------------------
-Currently the solution only works with the default FileBlob storage that comes with EPiServer 7.5, 
-but we will look into adding support for Azure and other providers in the future.
+Currently the solution only works with the default FileBlob storage that comes with EPiServer 7.5+.
+We will look into adding support for Azure and other providers in the future.
