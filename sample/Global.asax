@@ -1,0 +1,1 @@
+﻿<%@ Application Codebehind="Global.asax.cs" Language="C#" Inherits="Knowit.EPiModules.ImageScaling.Sample.Global" %>

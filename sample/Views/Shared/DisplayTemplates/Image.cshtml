@@ -1,0 +1,13 @@
+﻿@using System.Web.Mvc.Html
+@using EPiServer
+@using EPiServer.ServiceLocation
+@using Knowit.EPiModules.ImageScaling.Sample.Models.Media
+@model EPiServer.Core.ContentReference
+
+@{
+    if (Model != null)
+    {
+        var image = ServiceLocator.Current.GetInstance<IContentRepository>().Get<ImageMedia>(Model);
+        @Html.DisplayFor(x => image)
+    }
+}
