@@ -3,7 +3,7 @@ Knowit.EPiModules.ImageScaling
 
 Nuget package
 ------------------------------
-The nuget package for this project is located at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/). Add this to Visual Studio and write Install-Package Knowit.EPiModules.ImageScaling in the package manager console.
+The nuget package for this project is pending review at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/). When accepted you can add the feed to Visual Studio and write Install-Package Knowit.EPiModules.ImageScaling in the package manager console.
 
 
 Usage
