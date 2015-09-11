@@ -21,16 +21,19 @@ using EPiServer;
 using EPiServer.Core;
 using EPiServer.Framework.Blobs;
 using EPiServer.ImageLibrary;
+using EPiServer.Personalization;
 using EPiServer.Security;
 using EPiServer.ServiceLocation; 
 using EPiServer.Web;
 using EPiServer.Web.Routing;
+using Knowit.EpiModules.ImageScaling.Cache;
 using log4net;
+using Task = System.Threading.Tasks.Task;
 
 
-namespace Knowit.EPiModules.ImageScaling
+namespace Knowit.EpiModules.ImageScaling
 {
-    public abstract class BaseImageHandler<T> : IHttpHandler, IRenderTemplate<T> where T : ImageData
+    public abstract class BaseImageHandler<T> : IHttpAsyncHandler, IRenderTemplate<T> where T : ImageData
     {
         private readonly IImageService _imageService;
         private readonly ContentRouteHelper _routeHelper;
@@ -49,7 +52,17 @@ namespace Knowit.EPiModules.ImageScaling
             get { return false; }
         }
 
-        public void ProcessRequest(HttpContext context)
+        public IAsyncResult BeginProcessRequest(HttpContext context, AsyncCallback cb, object extraData)
+        {
+            return new AsyncResult(cb, extraData, AsyncImageOperations(context));
+        }
+
+        public void EndProcessRequest(IAsyncResult result)
+        {
+            ((AsyncResult)result).Task.Wait(); // wait to let the task throw potential exceptions
+        }
+
+        async Task AsyncImageOperations(HttpContext context)
         {
             var routedContent = GetRoutedContent();
 
@@ -60,57 +73,108 @@ namespace Knowit.EPiModules.ImageScaling
             }
 
             var imageFile = GetImageFile(routedContent);
-            var filePath = GetFilePath(imageFile);
-            var extension = Path.GetExtension(filePath);
-            var contentType = GetMimeType(extension);
+            var contentType = GetMimeType(imageFile);
 
-            var cacheKey = GetCacheKey(context.Request);
-            var cachePath = GetCachedFilePath(imageFile.ContentLink, cacheKey);
-
-            if (cachePath != null && File.Exists(cachePath) && File.GetLastWriteTimeUtc(cachePath) > imageFile.Changed.ToUniversalTime())
+            if (!ApplyImageOperations(context)) // return the original image
             {
-                Log.Debug("Returning scaled image from cache: " + cachePath);
-                ReturnResponse(context, contentType, () => context.Response.WriteFile(cachePath));
+                using (var stream = imageFile.BinaryData.OpenRead())
+                {
+                    await AsyncResponse(context, contentType, stream);
+                    return;
+                }
             }
-            else
+            
+            
+            var cacheKey = GetCacheKey(context);
+            if (!string.IsNullOrEmpty(cacheKey))
             {
-                var imageActions = GetImageActions(context.Request);
+                var cacheStream = CacheHandler.GetImageCacheStream(imageFile, cacheKey, CacheName);
+                if (cacheStream != null)
+                {
+                    using (cacheStream)
+                    {
+                        await AsyncResponse(context, contentType, cacheStream);
+                        return;
+                    }
+                }
+            }
+                
+                
+            var imageActions = GetImageActions(context);
 
+            var originalStream = new MemoryStream();
+            using (var stream = imageFile.BinaryData.OpenRead()) // get original image
+            {
+                await stream.CopyToAsync(originalStream);
+            }
+
+            using (originalStream)
+            {
                 if (imageActions != null)
                 {
                     var imageQuality = GetImageQuality(context.Request);
                     var imageZoomFactor = GetZoomFactor(context.Request);
-                    var processedImage = ProcessImage(filePath, imageActions, contentType, imageZoomFactor, imageQuality);
+
+                    var processedImage = ProcessImage(originalStream.GetBuffer(), imageActions, contentType, imageZoomFactor, imageQuality);
+
                     if (processedImage != null && processedImage.Length > 0)
                     {
-                        SaveToCache(cachePath, processedImage);
-                        ReturnResponse(context, contentType, () => context.Response.BinaryWrite(processedImage));
+                        var stream = !string.IsNullOrEmpty(cacheKey) 
+                            ? CacheHandler.SaveImageCache(processedImage, imageFile, cacheKey, CacheName) 
+                            : new MemoryStream(processedImage);
+
+                        await AsyncResponse(context, contentType, stream);
                         return;
                     }
                 }
-                ReturnResponse(context, contentType, () => context.Response.WriteFile(filePath));
+
+                originalStream.Seek(0, SeekOrigin.Begin); 
+                await AsyncResponse(context, contentType, originalStream);
             }
+                
+            
+        }
+
+        async Task AsyncResponse(HttpContext context, string contentType, Stream stream)
+        {
+            context.Response.Clear();
+            context.Response.ContentType = contentType;
+            context.Response.Cache.SetCacheability(HttpCacheability.Private);
+            context.Response.Cache.SetMaxAge(ClientSideCacheMaxAge);
+            await stream.CopyToAsync(context.Response.OutputStream);
+        }
+
+        public async void ProcessRequest(HttpContext context)
+        {
+            await AsyncImageOperations(context);
         }
 
         #endregion
 
         #region Must be implemented
-        protected abstract List<ImageOperation> GetImageActions(HttpRequest request);
+        protected abstract List<ImageOperation> GetImageActions(HttpContext context);
+
+        /// <summary>
+        /// The cache handler to use.
+        /// </summary>
+        protected abstract ICacheHandler<T> CacheHandler { get; }
+
+        /// <summary>
+        /// Should be relative to OperationPresets, as well as ImageQuality and Zoomfactor if modified from defaults.
+        /// </summary>
+        protected abstract string GetCacheKey(HttpContext context);
+
         #endregion
 
         #region Overrideable
 
         /// <summary>
-        /// Default is [AppDataPath]/ImageScalingCache/
+        /// Used to check if the handler should apply image operations or not.
+        /// Override and make it context-aware where necessary. True by default.
         /// </summary>
-        protected virtual string CacheFolder
+        protected virtual bool ApplyImageOperations(HttpContext context)
         {
-            get
-            {
-                return Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    EPiServer.Framework.Configuration.EPiServerFrameworkSection.Instance.AppData.BasePath + "\\ImageScalingCache");
-            }
+            return true;
         }
 
         /// <summary>
@@ -119,12 +183,14 @@ namespace Knowit.EPiModules.ImageScaling
         protected virtual TimeSpan ClientSideCacheMaxAge { get { return TimeSpan.FromDays(1); } }
 
         /// <summary>
-        /// Default returns null. This effectivly disables caching.
-        /// Should be relative to OperationPresets, as well as ImageQuality and Zoomfactor if modified from defaults.
+        /// Default is ImageHandlerCache
         /// </summary>
-        protected virtual string GetCacheKey(HttpRequest request)
+        protected virtual string CacheName
         {
-            return null;
+            get
+            {
+                return "ImageHandlerCache";
+            }
         }
 
         /// <summary>
@@ -174,67 +240,27 @@ namespace Knowit.EPiModules.ImageScaling
 
         #region Private
 
-        private void SaveToCache(string cachePath, byte[] processedImage)
+        // Only the following mimetypes are supported by EPiServer's ImageService: 
+        // - image/png - image/x-icon - image/bmp - image/gif - image/tiff - image/jpg - image/jpe - image/jpeg - image/pjpeg
+        // Extending beyond this will cause exceptions further down the line.
+        private string GetMimeType(T imageFile)
         {
-            if (cachePath == null)
+            var mimetype = imageFile.MimeType;
+            switch (mimetype)
             {
-                Log.Debug("SaveToCache: Caching disabled");
-                return;
-            }
 
-            Log.Info("SaveToCache: Saving scaled image to cache: " + cachePath);
-            var directory = Path.GetDirectoryName(cachePath);
-            if (directory != null)
-            {
-                if (!Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                    Log.Info("SaveToCache: Created cache directory for: " + cachePath);
-                }
-                File.WriteAllBytes(cachePath, processedImage);
-                Log.Info("SaveToCache: Cache successfully saved: " + cachePath);
-            }
-            else
-            {
-                Log.Error("SaveToCache: Could not save to cache: " + cachePath);
-            }
-
-
-        }
-
-        private string GetCachedFilePath(ContentReference contentLink, string cacheKey)
-        {
-            if (cacheKey == null)
-            {
-                Log.Debug("GetCachedFilePath: Caching disabled");
-                return null;
-            }
-            return CacheFolder + "\\" + contentLink.ID + "\\" + cacheKey + ".cache";
-
-        }
-
-        private string GetMimeType(string extension)
-        {
-            // Only the following mimetypes are supported by EPiServer's ImageService: 
-            // - image/png - image/x-icon - image/bmp - image/gif - image/tiff - image/jpg - image/jpe - image/jpeg - image/pjpeg
-            // Extending beyond this will cause exceptions further down the line.
-
-            var extensionLowered = extension.Replace(".", string.Empty).ToLower();
-            switch (extensionLowered)
-            {
-                case "ico":
-                    return "image/x-icon";
-                case "bmp":
-                case "gif":
-                case "tiff":
-                case "jpg":
-                case "jpe":
-                case "jpeg":
-                case "pjpeg":
-                case "png":
-                    return "image/" + extensionLowered;
+                case "image/x-icon":
+                case "image/bmp":
+                case "image/gif":
+                case "image/tiff":
+                case "image/jpg":
+                case "image/jpe":
+                case "image/jpeg":
+                case "image/pjpeg":
+                case "image/png":
+                    return mimetype;
                 default:
-                    var message = "Could not find supporting Mimetype to extenstion: " + extension;
+                    var message = "Unsupported mimetype: " + mimetype;
                     Log.Fatal("GetMimeType: " + message);
                     throw new NotSupportedException(message);
             }
@@ -262,33 +288,12 @@ namespace Knowit.EPiModules.ImageScaling
             return null;
         }
 
-        private string GetFilePath(T imageFile)
+        private byte[] ProcessImage(byte[] imageBytes, IEnumerable<ImageOperation> imageActions, string contentType, float zoomFactor, int imageQuality)
         {
-            var blob = imageFile.BinaryData as FileBlob;
-            if (blob != null && File.Exists(blob.FilePath)) return blob.FilePath;
-
-            NotFound();
-            return null;
-        }
-
-        private void ReturnResponse(HttpContext context, string contentType, Action writeImage)
-        {
-            context.Response.Clear();
-            context.Response.ContentType = contentType;
-            context.Response.Cache.SetCacheability(HttpCacheability.Private);
-            context.Response.Cache.SetMaxAge(ClientSideCacheMaxAge);
-            writeImage();
-            context.Response.End();
-        }
-
-        private byte[] ProcessImage(string filePath, IEnumerable<ImageOperation> imageActions, string contentType, float zoomFactor, int imageQuality)
-        {
-            var imageBytes = File.ReadAllBytes(filePath);
             var processedImage = _imageService.RenderImage(imageBytes, imageActions, contentType, zoomFactor, imageQuality);
             return processedImage;
         }
 
         #endregion
-
     }
 }
