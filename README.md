@@ -3,7 +3,10 @@ Knowit.EPiModules.ImageScaling
 
 Nuget package
 ------------------------------
-The nuget package for this project is pending review at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/). When accepted you can add the feed to Visual Studio and write Install-Package Knowit.EPiModules.ImageScaling in the package manager console.
+The nuget package for this project is located at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/). Add it to your package repositories and run Install-Package Knowit.EPiModules.ImageScaling
+
+Note: Version 1.1 is pending review by EPiServer. Until accepted, you can compile from source instead.
+
 
 
 Usage
@@ -22,16 +25,16 @@ The following extensions can be used: jpg, jpeg, jpe, pjpeg, ico, gif, bmp, png,
     }
 ```
 
-Create a class that inherits BaseImageHandler. Implement the abstract function GetImageActions(HttpRequest request).
+Create a class that inherits BaseImageHandler. Implement the abstract members GetImageActions, CacheHandler and GetCacheKey.
 
 ```csharp
     public class ImageHandler : BaseImageHandler<ImageMedia>
     {
-        protected override List<ImageOperation> GetImageActions(HttpRequest request)
+        protected override List<ImageOperation> GetImageActions(HttpContext context)
         {
-            var preset = request.Params["preset"];
-            
-            if (preset != null && preset == "500width") 
+            var preset = context.Request.Params["preset"];
+
+            if (preset != null && preset == "500width")
             {
                 // The image will be resized to 500px wide, with the same aspect ratio
                 return new List<ImageOperation>
@@ -42,34 +45,18 @@ Create a class that inherits BaseImageHandler. Implement the abstract function G
 
             return null; //The image will not be processed
         }
-    }
-```
-
-To enable caching you must override the virtual function GetCacheKey(HttpRequest request). 
-Typically the key will be the same as your preset, but if you also wish to change ImageQuality 
-and/or ZoomFactor this should also be incorporated in the cachekey. 
-By default the cached files will be stored within a subdirectory of the AppData folder 
-(as specified in EPiServer.Framework config).
-
-
-```csharp
-    public class ImageHandler : BaseImageHandler<ImageMedia>
-    {
-        //... GetImageActions
-    
-        protected override string GetCacheKey(HttpRequest request)
+        
+        protected override ICacheHandler<ImageMedia> CacheHandler
         {
-            //caching will be disabled if preset returns null
-            return request.Params["preset"];
+            get { return new FileCacheHandler<ImageMedia>(); }
+        }
+        
+        protected override string GetCacheKey(HttpContext context)
+        {
+            return context.Request.Params["preset"];
         }
     }
 ```
 
 For further customization there are several methods and properties that you can override. 
 Have a look at the source code, play around and have some fun with it to get an idea of what the possibilities are.
-
-
-Notes:
-------------------------------
-Currently the solution only works with the default FileBlob storage that comes with EPiServer 7.5+.
-We will look into adding support for Azure and other providers in the future.
