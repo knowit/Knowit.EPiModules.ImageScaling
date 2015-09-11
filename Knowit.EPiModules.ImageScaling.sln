@@ -12,7 +12,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{39048B
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Knowit.EPiModules.ImageScaling.Sample", "sample\Knowit.EPiModules.ImageScaling.Sample\Knowit.EPiModules.ImageScaling.Sample.csproj", "{72C7BDCD-2E4F-4484-8115-C1715FDFFB5D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Knowit.EPiModules.ImageScaling.Sample", "sample\Knowit.EPiModules.ImageScaling.Sample.csproj", "{72C7BDCD-2E4F-4484-8115-C1715FDFFB5D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
