@@ -3,7 +3,7 @@ Knowit.EPiModules.ImageScaling
 
 Nuget package
 ------------------------------
-The nuget package for this project is located at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/). Add it to your package repositories and run Install-Package Knowit.EPiModules.ImageScaling
+The nuget package for this project used to be located at [EPiServer's nuget feed](https://nuget.episerver.com/en/Feed/), but its currently outdated for the new versions of episerver. Feel free to use the source code for now.
 
 
 Usage
@@ -22,7 +22,7 @@ The following extensions can be used: jpg, jpeg, jpe, pjpeg, ico, gif, bmp, png,
     }
 ```
 
-Create a class that inherits BaseImageHandler. Implement the abstract members GetImageActions, CacheHandler and GetCacheKey.
+Create a class that inherits BaseImageHandler. Implement the abstract member GetImageActions. If you want to cache the processed images you can override CacheHandler and GetCacheKey. Implementations for ICacheHandler using the filesystem or azure storage can be found in the source.
 
 ```csharp
     public class ImageHandler : BaseImageHandler<ImageMedia>
@@ -43,15 +43,17 @@ Create a class that inherits BaseImageHandler. Implement the abstract members Ge
             return null; //The image will not be processed
         }
         
-        protected override ICacheHandler<ImageMedia> CacheHandler
-        {
-            get { return new FileCacheHandler<ImageMedia>(); }
-        }
-        
-        protected override string GetCacheKey(HttpContext context)
-        {
-            return context.Request.Params["preset"];
-        }
+        //Required for caching of processed images
+
+        //protected override ICacheHandler<ImageMedia> CacheHandler
+        //{
+        //    get { return new FileCacheHandler<ImageMedia>(); }
+        //}
+
+        //protected override string GetCacheKey(HttpContext context)
+        //{
+        //    return GetPresetFromRequest(context.Request).ToString();
+        //}
     }
 ```
 
