@@ -28,14 +28,16 @@ namespace Knowit.EPiModules.ImageScaling.Sample.Business.ImageScaling
             return ImageOperationPresets.Get(GetPresetFromRequest(context.Request));
         }
 
-        protected override ICacheHandler<ImageMedia> CacheHandler
-        {
-            get { return new FileCacheHandler<ImageMedia>(); }
-        }
+        //Required for caching of processed images
 
-        protected override string GetCacheKey(HttpContext context)
-        {
-            return GetPresetFromRequest(context.Request).ToString();
-        }
+        //protected override ICacheHandler<ImageMedia> CacheHandler
+        //{
+        //    get { return new FileCacheHandler<ImageMedia>(); }
+        //}
+
+        //protected override string GetCacheKey(HttpContext context)
+        //{
+        //    return GetPresetFromRequest(context.Request).ToString();
+        //}
     }
 }
