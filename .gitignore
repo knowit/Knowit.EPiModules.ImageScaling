@@ -177,4 +177,5 @@ FakesAssemblies/
 # Our own stuff
 lib
 package
+.vs/
 

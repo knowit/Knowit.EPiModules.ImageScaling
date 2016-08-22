@@ -4,7 +4,8 @@ using System.Collections.Generic;
 using System.Web;
 using EPiServer.ImageLibrary;
 using Knowit.EpiModules.ImageScaling;
-using Knowit.EpiModules.ImageScaling.Cache;
+using Knowit.EpiModules.ImageScaling.Caching;
+using Knowit.EPiModules.ImageScaling.Caching.FileSystem;
 using Knowit.EPiModules.ImageScaling.Sample.Models.Media;
 
 namespace Knowit.EPiModules.ImageScaling.Sample.Business.ImageScaling
